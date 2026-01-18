@@ -21,5 +21,9 @@ async def call_llm(messages, model, temperature, max_tokens):
             headers=headers,
             json=payload,
         )
-        response.raise_for_status()
+        if response.status_code != 200:
+            
+            response.raise_for_status()
+
         return response.json()
+

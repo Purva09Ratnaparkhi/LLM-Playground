@@ -1,18 +1,20 @@
 from fastapi import FastAPI, HTTPException
 from app.schemas import ChatRequest
 from app.llm_client import call_llm
+from app.memory import get_memory, add_message
 
 app = FastAPI(title="LLM Playground API")
-
 
 @app.post("/chat")
 async def chat(req: ChatRequest):
     try:
-        messages = [
-            {"role": "system", "content": "You are a helpful assistant."},
-            {"role": "user", "content": req.prompt},
-        ]
+        # 1) Fetch or initialize memory for this session
+        messages = get_memory(req.session_id)
 
+        # 2) Add user's message to memory
+        add_message(req.session_id, "user", req.prompt)
+
+        # 3) Call the LLM with full conversation history
         result = await call_llm(
             messages=messages,
             model=req.model,
@@ -20,7 +22,13 @@ async def chat(req: ChatRequest):
             max_tokens=req.max_tokens,
         )
 
+        # 4) Extract assistant reply
         reply = result["choices"][0]["message"]["content"]
+
+        # 5) Add assistant reply to memory
+        add_message(req.session_id, "assistant", reply)
+
+        # 6) Return response
         return {"reply": reply}
 
     except Exception as e:
