@@ -28,3 +28,13 @@ def add_message(session_id: str, role: str, content: str):
     conversation_store[session_id].append(
         {"role": role, "content": content}
     )
+
+
+#memory trimming phase 3
+MAX_MESSAGES = 10  # last 10 messages (excluding system)
+
+
+def trim_memory(messages):
+    system = messages[0]
+    recent = messages[-MAX_MESSAGES:]
+    return [system] + recent
