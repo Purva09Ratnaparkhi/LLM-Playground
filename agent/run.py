@@ -5,13 +5,18 @@ from agent.graph import agent
 async def run():
     initial_state = {
         "messages": [
-            {"role": "system", "content": 
-                "You are an intelligent agent. "
-                "Think step by step. "
-                "When you reach a final answer, prefix it with 'FINAL ANSWER:'"
-                },
-
-            {"role": "user", "content": "Explain agentic AI in simple terms"},
+            {
+                "role": "system",
+                "content":
+                "You are an intelligent agent.\n"
+                "If a calculation is required, use the calculator tool.\n\n"
+                "Tool call format:\n"
+                "TOOL: calculator\n"
+                "INPUT: <expression>\n\n"
+                "When you reach a final answer, respond with:\n"
+                "FINAL ANSWER: <answer>"
+            },   
+            {"role": "user", "content": "What is 928374 * 182736?"},
         ]
     }
 

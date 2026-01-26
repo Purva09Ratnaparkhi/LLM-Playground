@@ -1,35 +1,74 @@
-import asyncio
+import os
 import httpx
-from app.config import OPENROUTER_API_KEY, OPENROUTER_BASE_URL
+import google.generativeai as genai
+from dotenv import load_dotenv
+
+load_dotenv()
+
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
+
+# ---------- GEMINI SETUP ----------
+if GEMINI_API_KEY:
+    genai.configure(api_key=GEMINI_API_KEY)
+
+GEMINI_MODEL = "models/gemini-2.5-flash"
 
 
-async def call_llm(messages, model, temperature, max_tokens, retries=3):
-    headers = {
-        "Authorization": f"Bearer {OPENROUTER_API_KEY}",
-        "Content-Type": "application/json",
-        "HTTP-Referer": "http://localhost:8000",
-        "X-Title": "LLM Playground API",
-    }
+async def call_gemini(messages, temperature=0.7):
+    model = genai.GenerativeModel(GEMINI_MODEL)
 
+    # Convert OpenAI-style messages → Gemini format
+    prompt = "\n".join(
+        f"{m['role'].upper()}: {m['content']}" for m in messages
+    )
+
+    response = model.generate_content(
+        prompt,
+        generation_config={"temperature": temperature}
+    )
+
+    return response.text
+
+
+# ---------- OLLAMA FALLBACK ----------
+OLLAMA_URL = "http://localhost:11434/api/chat"
+
+
+async def call_ollama(messages, model="mistral", temperature=0.7):
     payload = {
         "model": model,
         "messages": messages,
-        "temperature": temperature,
-        "max_tokens": max_tokens,
+        "options": {"temperature": temperature},
+        "stream": False,
     }
 
-    for attempt in range(retries):
-        try:
-            async with httpx.AsyncClient(timeout=30) as client:
-                response = await client.post(
-                    OPENROUTER_BASE_URL,
-                    headers=headers,
-                    json=payload,
-                )
-                response.raise_for_status()
-                return response.json()
+    timeout = httpx.Timeout(connect=30.0, read=300.0)
 
-        except Exception as e:
-            if attempt == retries - 1:
-                raise e
-            await asyncio.sleep(2 ** attempt)
+    async with httpx.AsyncClient(timeout=timeout) as client:
+        response = await client.post(OLLAMA_URL, json=payload)
+        response.raise_for_status()
+        data = response.json()
+        return data["message"]["content"]
+
+
+# ---------- UNIFIED INTERFACE ----------
+async def call_llm(messages, model=None, temperature=0.7, max_tokens=256):
+    # 1️⃣ Try Gemini first
+    try:
+        if GEMINI_API_KEY:
+            text = await call_gemini(messages, temperature)
+            return {
+                "choices": [
+                    {"message": {"content": text}}
+                ]
+            }
+    except Exception as e:
+        print("⚠️ Gemini failed, falling back to Ollama:", e)
+
+    # 2️⃣ Fallback to Ollama
+    text = await call_ollama(messages, temperature=temperature)
+    return {
+        "choices": [
+            {"message": {"content": text}}
+        ]
+    }
